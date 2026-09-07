@@ -1,10 +1,9 @@
+import proxy.ProxyServer;
 import server.Server;
 import server.ServerProcess;
 
-import java.io.IOException;
-
 public class Main {
-    static void main(String[] args) throws IOException {
+    static void main(String[] args) {
         var listenPort  = Integer.parseInt(args[0]);
         var targetHost  = args[1];
         var targetPort  = Integer.parseInt(args[2]);

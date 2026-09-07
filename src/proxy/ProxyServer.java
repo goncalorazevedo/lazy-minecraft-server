@@ -1,3 +1,5 @@
+package proxy;
+
 import client.Client;
 import server.Server;
 
@@ -6,14 +8,13 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.rmi.ServerError;
 import java.util.concurrent.StructuredTaskScope;
 
-class ProxyServer {
+public class ProxyServer {
 	private final int listenPort;
 	private final Server server;
 
-	ProxyServer(int listenPort, Server server) {
+	public ProxyServer(int listenPort, Server server) {
 		this.listenPort = listenPort;
 		this.server = server;
 	}
@@ -53,9 +54,11 @@ class ProxyServer {
 
 	public void handleClient(SocketChannel clientSockChannel) {
 		try (clientSockChannel) {
-			if (!isServerUp()) {
+			if (server.getServerState() == Server.State.STOPPED) {
 				var client = new Client(clientSockChannel, server);
-				client.proccessClient();
+				if (client.isLoggingIn()) {
+					server.launch();
+				}
 			} else {
 				try (var srvSockChannel = server.createConnection()) {
 					proxyBidirectional(clientSockChannel, srvSockChannel);
@@ -63,28 +66,22 @@ class ProxyServer {
 			}
         } catch (Throwable t) {
 			System.err.println("Error handling client: " + t);
-			t.printStackTrace();
 		} finally {
 			System.out.println("Finished handling client");
 		}
 	}
 
-	private boolean isServerUp() {
-		try (SocketChannel pingChannel = server.createConnection()) {
-			return server.pingServer(pingChannel);
-		} catch (IOException e) {
-			return false;
-		}
-	}
-
-	public void proxyBidirectional(SocketChannel clientSockChannel, SocketChannel srvSockChannel) throws IOException {
+	public void proxyBidirectional(SocketChannel clientSockChannel, SocketChannel srvSockChannel) {
 		try (var scope = StructuredTaskScope.open(StructuredTaskScope.Joiner.allSuccessfulOrThrow())) {
+			server.incrementConnections();
 			scope.fork(() -> { proxyConnections(clientSockChannel, srvSockChannel); return null; });
 			scope.fork(() -> { proxyConnections(srvSockChannel, clientSockChannel); return null; });
 			scope.join();
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
-		}
+		} finally {
+			server.decrementConnections();
+        }
 	}
 
 	public void proxyConnections(SocketChannel src, SocketChannel dst) throws IOException {
