@@ -1,11 +1,13 @@
 services:
   mc-proxy:
     build: .
+    restart: unless-stopped
     ports:
       - "30000:30000"
     volumes:
       - mc-world-data:/app/minecraft-server/world
       - mc-logs:/app/minecraft-server/logs
+
 
 volumes:
   mc-world-data:
